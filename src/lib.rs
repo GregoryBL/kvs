@@ -5,13 +5,12 @@
 use std::collections::HashMap;
 use std::string::String;
 
-
 /// The KvStore type.
 ///
 ///A wrapper around a HashMap.
 #[derive(Default)]
 pub struct KvStore {
-    store: HashMap<String,String>,
+    store: HashMap<String, String>,
 }
 
 impl KvStore {
@@ -21,7 +20,9 @@ impl KvStore {
     /// let mut store = KvStore::new();
     /// ```
     pub fn new() -> Self {
-        KvStore { store: Default::default() }
+        KvStore {
+            store: Default::default(),
+        }
     }
 
     /// Add a key/value pair
@@ -33,7 +34,7 @@ impl KvStore {
     /// # let mut store = KvStore::new();
     /// store.set("key".to_owned(), "value".to_owned());
     /// ```
-    pub fn set(&mut self, key:String, value:String) {
+    pub fn set(&mut self, key: String, value: String) {
         self.store.insert(key, value);
     }
 
@@ -48,10 +49,10 @@ impl KvStore {
     /// let optVal = store.get("key".to_owned()); // Some(val)
     /// let optVal2 = store.get("notPresent".to_owned()); // None()
     /// ```
-    pub fn get(&self, key:String) -> Option<String> {
+    pub fn get(&self, key: String) -> Option<String> {
         match self.store.get(&key) {
             Some(value) => Some(value.to_owned()),
-            None        => None,
+            None => None,
         }
     }
 
@@ -63,7 +64,7 @@ impl KvStore {
     /// store.remove("key".to_owned());
     /// let val = store.get("key".to_owned()); // None()
     /// ```
-    pub fn remove(&mut self, key:String) {
+    pub fn remove(&mut self, key: String) {
         self.store.remove(&key);
     }
 }
