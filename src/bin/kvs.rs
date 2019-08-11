@@ -1,9 +1,15 @@
 extern crate clap;
-use clap::{App, Arg, SubCommand};
-// use kvs::KvStore;
+#[macro_use] extern crate failure;
+
+use clap::{App, Arg, SubCommand, ArgMatches};
+//use failure::err_msg;
 use std::process;
 
-fn main() {
+use kvs::{KvStore, Result};
+use std::path::Path;
+
+
+fn main() -> Result<()> {
     let matches = App::new(env!("CARGO_PKG_NAME"))
         .version(env!("CARGO_PKG_VERSION"))
         .author(env!("CARGO_PKG_AUTHORS"))
@@ -44,30 +50,47 @@ fn main() {
         )
         .get_matches();
 
-    // let kvs = KvStore::new();
+    let mut kvs = KvStore::open(Path::new("kvstore.store"))?;
 
-    // let key = matches.value_of("key").unwrap().to_string();
-
-    match matches.subcommand_name() {
-        Some("set") => {
-            // let value = matches.value_of("value").unwrap().to_string();
-            // kvs.set(key,value);
-            eprintln!("unimplemented");
-            process::exit(1)
+    match matches.subcommand() {
+        ("set", Some(sub_m)) => {
+            let key = get_key(&sub_m)?;
+            let value = get_value(&sub_m)?;
+            kvs.set(key,value)
         }
-        Some("get") => {
-            // kvs.get(key);
-            eprintln!("unimplemented");
-            process::exit(1)
+        ("get", Some(sub_m)) => {
+            let key = get_key(&sub_m)?;
+            let val = kvs.get(key)?;
+            println!("{}", val.unwrap_or("Key not found".to_string()));
+            Ok(())
         }
-        Some("rm") => {
-            // kvs.remove(key);
-            eprintln!("unimplemented");
-            process::exit(1)
+        ("rm", Some(sub_m)) => {
+            let key = get_key(&sub_m)?;
+            match kvs.get(key.clone())? {
+                None => {
+                    println!("Key not found");
+                    process::exit(1)
+                },
+                Some(_) => {
+                    kvs.remove(key)
+                }
+            }
         }
         _ => {
             eprintln!("Error: No subcommand match.");
             process::exit(1)
         }
     }
+}
+
+fn get_key(matches: &ArgMatches) -> Result<String> {
+    matches.value_of("key")
+        .ok_or(format_err!("failed to find key in args"))
+        .map(|e| e.to_string())
+}
+
+fn get_value(matches: &ArgMatches) -> Result<String> {
+    matches.value_of("value")
+        .ok_or(format_err!("failed to find value in args"))
+        .map(|e| e.to_string())
 }
