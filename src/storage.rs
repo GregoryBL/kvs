@@ -6,7 +6,7 @@ use serde::{Serialize, Deserialize};
 
 use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
-use std::io::{SeekFrom};
+use std::io::{Seek, SeekFrom};
 use std::path::PathBuf;
 
 use crate::{Result, KvStoreCmd};
@@ -65,7 +65,7 @@ impl KvStoreFile {
         let doc = bson_val.as_document()
             .ok_or(format_err!("Couldn't form bson doc."))?;
         bson::encode_document(&mut self.writer, doc)?;
-        Ok(self.writer.seek(SeekFrom::Current(0)))
+        Ok(self.writer.seek(SeekFrom::Current(0))?)
     }
 }
 
@@ -73,7 +73,7 @@ impl IntoIterator for KvStoreFile {
     type Item = KvStoreCmd;
     type IntoIter = KvStoreFileCommandIterator;
     fn into_iter(self) -> Self::IntoIter {
-        KvStoreFileCommandIterator::new(self.path)
+        KvStoreFileCommandIterator::new(self.path).expect("Failure making iterator")
     }
 }
 
@@ -93,16 +93,19 @@ struct KvStoreFileCommandIterator {
 impl KvStoreFileCommandIterator {
     pub fn new(path: PathBuf) -> Result<Self> {
         let mut reader = OpenOptions::new().read(true).open(path.as_path())?;
-        KvStoreFileCommandIterator { file: reader }
+        Ok(KvStoreFileCommandIterator { file: reader })
     }
 }
 
 impl Iterator for KvStoreFileCommandIterator {
     type Item = KvStoreCmd;
     fn next(&mut self) -> Option<KvStoreCmd> {
-        let bson = bson::Bson::from(bson::decode_document(&mut self.reader)?);
-        let cmd : KvStoreCmd = bson::from_bson(bson);
-        match cmd {
+        fn get_next_item(file: File) -> Result<KvStoreCmd> {
+            let bson = bson::Bson::from(bson::decode_document(&mut file)?);
+            let cmd : KvStoreCmd = bson::from_bson(bson)?;
+            Ok(cmd)
+        }
+        match get_next_item(self.file) {
             Ok(_cmd) => Some(_cmd),
             Err(err) => None
         }
@@ -135,14 +138,14 @@ impl KvStoreArchive {
                 Ok(doc) => {
                     let bson_file = bson::Bson::from(doc);
                     let storage : KvStoreStorage = bson::from_bson(bson_file)?;
-                    let kv_file = KvStoreFile::open(storage.path)?;
+                    let kv_file = KvStoreFile::open(PathBuf::from(storage.path))?;
 
-                    paths.push(storage.path);
+                    paths.push(PathBuf::from(storage.path));
                     files.insert(storage.file_num, kv_file);
                 }
             }
         }
-        Ok(KvStoreArchive { path: path, files: files})
+        Ok(KvStoreArchive { path: path, paths: paths, files: files})
     }
 
     pub fn read_value_from_filenum_at_offset(
@@ -150,14 +153,14 @@ impl KvStoreArchive {
         file_num: FileNum,
         offset: FileOffset,
     ) -> Result<String> {
-        let file = self.files[file_num]?;
+        let file = self.files[&file_num];
         file.read_value_at_offset(offset)
     }
 
-    pub fn write_cmd_to_filenum(&mut self,
-                                file_num: FileNum,
-                                cmd: KvStoreCmd) -> Result<()> {
-        let file = self.files[file_num]?;
+    //////// NEED TO MAKE THIS KNOW WHAT FILE IT WRITES TO //////////
+    pub fn write_cmd(&mut self,
+                     cmd: KvStoreCmd) -> Result<(FileNum, FileOffset)> {
+        let file = self.files.last()?;
         file.record_command(cmd)
     }
 
@@ -175,29 +178,4 @@ impl KvStoreArchive {
         }
         Ok(index)
     }
-
-    // pub fn to_commands(&self) -> impl Iterator<Item = KvStoreCmd> {
-    //     paths.flat_map(|path| KvStoreFileCommandIterator { path: path })
-    // }
 }
-
-// struct KvStoreArchiveCmdIterator {
-//     files: Vec<PathBuf>,
-//     file_index: usize = 0,
-//     curr_reader: File,
-// }
-
-// impl KvStoreArchiveCmdIterator {
-//     pub fn new(paths: Vec<PathBuf>) -> Result<Self> {
-//         let file_index = 0;
-//         let curr_reader = OpenOptions::new()
-//             .read(true)
-//             .open(paths[&file_index].as_path())?;
-//         KvStoreArchiveCmdIterator {
-//             files: files,
-//             file_index: file_index,
-//             curr_reader: curr_reader,
-//         }
-//     }
-// }
-
